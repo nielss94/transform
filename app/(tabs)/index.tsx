@@ -1,6 +1,8 @@
 import { Image } from "expo-image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -10,13 +12,15 @@ import {
 } from "react-native";
 
 import CameraComponent from "@/components/CameraComponent";
+import { TransformationService } from "@/lib/database";
+import { initializeStorage, uploadPhoto } from "@/lib/storage";
 
 type PhotoMode = "before" | "after";
 
-interface Transformation {
+interface LocalTransformation {
   id: string;
   beforePhoto: string;
-  afterPhoto: string;
+  afterPhoto: string | null;
   createdAt: Date;
 }
 
@@ -25,40 +29,139 @@ export default function HomeScreen() {
   const [beforePhoto, setBeforePhoto] = useState<string | null>(null);
   const [afterPhoto, setAfterPhoto] = useState<string | null>(null);
   const [currentMode, setCurrentMode] = useState<PhotoMode>("before");
+  const [currentTransformationId, setCurrentTransformationId] = useState<
+    string | null
+  >(null);
   const [savedTransformations, setSavedTransformations] = useState<
-    Transformation[]
+    LocalTransformation[]
   >([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handlePhotoTaken = (photoUri: string) => {
-    if (currentMode === "before") {
-      setBeforePhoto(photoUri);
-      setCurrentMode("after");
-    } else {
-      // After photo taken - save the complete transformation
-      const newTransformation: Transformation = {
-        id: Date.now().toString(),
-        beforePhoto: beforePhoto!,
-        afterPhoto: photoUri,
-        createdAt: new Date(),
-      };
+  const handlePhotoTaken = async (photoUri: string) => {
+    setIsUploading(true);
 
-      setSavedTransformations((prev) => [newTransformation, ...prev]);
-      setAfterPhoto(photoUri);
+    try {
+      if (currentMode === "before") {
+        // Upload before photo
+        const uploadResult = await uploadPhoto(photoUri, "before");
+
+        if (!uploadResult.success) {
+          Alert.alert(
+            "Upload Failed",
+            uploadResult.error || "Failed to upload photo"
+          );
+          return;
+        }
+
+        // Create transformation record in database
+        const transformation = await TransformationService.createTransformation(
+          uploadResult.url!
+        );
+
+        if (!transformation) {
+          Alert.alert("Error", "Failed to save transformation");
+          return;
+        }
+
+        setBeforePhoto(uploadResult.url!);
+        setCurrentTransformationId(transformation.id);
+        setCurrentMode("after");
+      } else {
+        // Upload after photo
+        const uploadResult = await uploadPhoto(photoUri, "after");
+
+        if (!uploadResult.success) {
+          Alert.alert(
+            "Upload Failed",
+            uploadResult.error || "Failed to upload photo"
+          );
+          return;
+        }
+
+        // Update transformation record with after photo
+        const updatedTransformation =
+          await TransformationService.updateTransformation(
+            currentTransformationId!,
+            uploadResult.url!
+          );
+
+        if (!updatedTransformation) {
+          Alert.alert("Error", "Failed to update transformation");
+          return;
+        }
+
+        // Update local state
+        setAfterPhoto(uploadResult.url!);
+
+        // Add to saved transformations
+        const newLocalTransformation: LocalTransformation = {
+          id: updatedTransformation.id,
+          beforePhoto: updatedTransformation.before_photo_url,
+          afterPhoto: updatedTransformation.after_photo_url || null,
+          createdAt: new Date(updatedTransformation.created_at),
+        };
+
+        setSavedTransformations((prev) => [newLocalTransformation, ...prev]);
+      }
+    } catch (error) {
+      console.error("Photo handling error:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setIsUploading(false);
+      setShowCamera(false);
     }
-    setShowCamera(false);
   };
 
   const startNewComparison = () => {
     setBeforePhoto(null);
     setAfterPhoto(null);
+    setCurrentTransformationId(null);
     setCurrentMode("before");
   };
+
+  // Load saved transformations on component mount
+  useEffect(() => {
+    const loadTransformations = async () => {
+      try {
+        await initializeStorage();
+        const transformations =
+          await TransformationService.getCompletedTransformations();
+
+        const localTransformations: LocalTransformation[] = transformations.map(
+          (t) => ({
+            id: t.id,
+            beforePhoto: t.before_photo_url,
+            afterPhoto: t.after_photo_url || null,
+            createdAt: new Date(t.created_at),
+          })
+        );
+
+        setSavedTransformations(localTransformations);
+      } catch (error) {
+        console.error("Failed to load transformations:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTransformations();
+  }, []);
 
   const getButtonText = () => {
     if (!beforePhoto) return "📸 Take Before Photo";
     if (!afterPhoto) return "📸 Take After Photo";
     return "📸 Start New Comparison";
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading transformations...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -124,16 +227,35 @@ export default function HomeScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.actionButton}
+                style={[
+                  styles.actionButton,
+                  isUploading && styles.actionButtonDisabled,
+                ]}
                 onPress={() => {
+                  if (isUploading) return;
+
                   if (beforePhoto && afterPhoto) {
                     startNewComparison();
                   } else {
                     setShowCamera(true);
                   }
                 }}
+                disabled={isUploading}
               >
-                <Text style={styles.actionButtonText}>{getButtonText()}</Text>
+                {isUploading ? (
+                  <View style={styles.buttonContent}>
+                    <ActivityIndicator color="white" size="small" />
+                    <Text
+                      style={[styles.actionButtonText, styles.uploadingText]}
+                    >
+                      {currentMode === "before"
+                        ? "Uploading Before Photo..."
+                        : "Uploading After Photo..."}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.actionButtonText}>{getButtonText()}</Text>
+                )}
               </TouchableOpacity>
             </View>
           ) : (
@@ -148,8 +270,12 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <TouchableOpacity
-                style={styles.startButton}
+                style={[
+                  styles.startButton,
+                  isUploading && styles.startButtonDisabled,
+                ]}
                 onPress={() => setShowCamera(true)}
+                disabled={isUploading}
               >
                 <Text style={styles.startButtonText}>
                   📸 Start Transformation
@@ -175,7 +301,7 @@ export default function HomeScreen() {
                       <Text style={styles.feedArrowText}>→</Text>
                     </View>
                     <Image
-                      source={{ uri: transformation.afterPhoto }}
+                      source={{ uri: transformation.afterPhoto || "" }}
                       style={styles.feedPhoto}
                     />
                   </View>
@@ -528,6 +654,33 @@ const styles = StyleSheet.create({
 
   bottomSpacing: {
     height: 40,
+  },
+
+  // Loading States
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#64748b",
+  },
+
+  // Upload States
+  actionButtonDisabled: {
+    backgroundColor: "#9ca3af",
+  },
+  startButtonDisabled: {
+    backgroundColor: "#9ca3af",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  uploadingText: {
+    marginLeft: 8,
   },
 
   // My Transformations Section
