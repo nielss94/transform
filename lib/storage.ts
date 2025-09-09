@@ -84,7 +84,7 @@ export async function uploadPhoto(
       .from(STORAGE_BUCKET)
       .upload(filePath, bytes, {
         contentType: "image/jpeg",
-        upsert: false,
+        upsert: true,
       });
 
     if (error) {
@@ -140,22 +140,38 @@ export async function initializeStorage(): Promise<void> {
   try {
     const { error } = await supabase.storage.getBucket(STORAGE_BUCKET);
 
-    if (error && error.message.includes("not found")) {
-      // Bucket doesn't exist, create it
-      const { error: createError } = await supabase.storage.createBucket(
-        STORAGE_BUCKET,
-        {
-          public: true,
-          allowedMimeTypes: ["image/jpeg", "image/png"],
-          fileSizeLimit: 5242880, // 5MB limit
-        }
-      );
+    if (error) {
+      console.log("Error checking bucket:", error);
 
-      if (createError) {
-        console.error("Failed to create storage bucket:", createError);
+      if (
+        error.message.includes("not found") ||
+        error.message.includes("does not exist")
+      ) {
+        // Bucket doesn't exist, create it
+        const { error: createError } = await supabase.storage.createBucket(
+          STORAGE_BUCKET,
+          {
+            public: true,
+            allowedMimeTypes: [
+              "image/jpeg",
+              "image/png",
+              "image/jpg",
+              "image/webp",
+            ],
+            fileSizeLimit: 5242880, // 5MB limit
+          }
+        );
+
+        if (createError) {
+          console.error("Failed to create storage bucket:", createError);
+        } else {
+          console.log("Storage bucket created successfully");
+        }
       } else {
-        console.log("Storage bucket created successfully");
+        console.error("Error checking bucket:", error);
       }
+    } else {
+      console.log("Storage bucket already exists");
     }
   } catch (error) {
     console.error("Storage initialization error:", error);

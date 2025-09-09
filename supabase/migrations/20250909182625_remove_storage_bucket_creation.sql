@@ -1,0 +1,9 @@
+-- This migration removes storage bucket creation from SQL migrations
+-- to avoid RLS policy conflicts.
+-- 
+-- Storage bucket creation is now handled programmatically via:
+-- lib/storage.ts → initializeStorage() function
+--
+-- Or manually via Supabase Dashboard → Storage → Create bucket
+-- 
+-- No database changes needed in this migration.

@@ -129,6 +129,36 @@ export class TransformationService {
   }
 
   /**
+   * Get incomplete transformations (missing after photo)
+   */
+  static async getIncompleteTransformations(): Promise<Transformation[]> {
+    try {
+      const { data, error } = await supabase
+        .from("transformations")
+        .select("*")
+        .is("after_photo_url", null)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching incomplete transformations:", error);
+        return [];
+      }
+
+      return data.map((item: SupabaseTransformation) => ({
+        id: item.id,
+        before_photo_url: item.before_photo_url,
+        after_photo_url: item.after_photo_url || undefined,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        user_id: item.user_id || undefined,
+      }));
+    } catch (error) {
+      console.error("Error fetching incomplete transformations:", error);
+      return [];
+    }
+  }
+
+  /**
    * Get a specific transformation by ID
    */
   static async getTransformation(id: string): Promise<Transformation | null> {

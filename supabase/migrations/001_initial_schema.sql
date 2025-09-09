@@ -8,28 +8,15 @@ CREATE TABLE IF NOT EXISTS transformations (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create storage bucket for photos
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-    'transformation-photos',
-    'transformation-photos',
-    true,
-    5242880,
-    ARRAY['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
-) ON CONFLICT (id) DO NOTHING;
-
--- Storage policies for transformation photos
-CREATE POLICY "Enable read access for all users" ON storage.objects
-FOR SELECT USING (bucket_id = 'transformation-photos');
-
-CREATE POLICY "Enable upload for authenticated users" ON storage.objects
-FOR INSERT WITH CHECK (bucket_id = 'transformation-photos');
-
-CREATE POLICY "Enable update for authenticated users" ON storage.objects
-FOR UPDATE USING (bucket_id = 'transformation-photos');
-
-CREATE POLICY "Enable delete for authenticated users" ON storage.objects
-FOR DELETE USING (bucket_id = 'transformation-photos');
+-- Note: Storage bucket 'transformation-photos' should be created manually via:
+-- 1. Supabase Dashboard → Storage → Create bucket
+-- 2. Or programmatically via initializeStorage() function in lib/storage.ts
+-- 
+-- Bucket settings:
+-- - Name: transformation-photos
+-- - Public: true
+-- - File size limit: 5MB (5242880 bytes)
+-- - Allowed MIME types: image/jpeg, image/png, image/jpg, image/webp
 
 -- RLS policies for transformations table
 ALTER TABLE transformations ENABLE ROW LEVEL SECURITY;
