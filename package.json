@@ -12,7 +12,13 @@
     "db:new": "npx supabase migration new",
     "db:diff": "npx supabase db diff --linked",
     "db:push": "npx supabase db push",
-    "db:status": "npx supabase migration list"
+    "db:status": "npx supabase migration list",
+    "build:android:dev": "eas build --platform android --profile development",
+    "build:android:preview": "eas build --platform android --profile preview",
+    "build:android": "eas build --platform android --profile production",
+    "build:ios": "eas build --platform ios --profile production",
+    "submit:android": "eas submit --platform android --profile production",
+    "submit:ios": "eas submit --platform ios --profile production"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
