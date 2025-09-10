@@ -1,5 +1,6 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -108,22 +109,47 @@ function TransformationCard({
 export default function TransformationFeed() {
   const [transformations, setTransformations] = useState<Transformation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const hasInitiallyLoadedRef = useRef(false);
 
-  useEffect(() => {
-    loadTransformations();
-  }, []);
-
-  const loadTransformations = async () => {
+  const loadTransformations = useCallback(async (showLoading = true) => {
     try {
+      if (showLoading) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
       const data = await TransformationService.getCompletedTransformations();
       setTransformations(data);
+      hasInitiallyLoadedRef.current = true;
     } catch (error) {
       console.error("Failed to load transformations:", error);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadTransformations();
+  }, [loadTransformations]);
+
+  // Refresh when the screen comes into focus (when user navigates back to Feed tab)
+  useFocusEffect(
+    useCallback(() => {
+      // Only refresh if we already have data (skip on initial load)
+      if (hasInitiallyLoadedRef.current) {
+        loadTransformations(false); // false = don't show full loading state
+      }
+    }, [loadTransformations])
+  );
+
+  const handleRefresh = useCallback(() => {
+    loadTransformations(false);
+  }, [loadTransformations]);
 
   const onViewableItemsChanged = ({
     viewableItems,
@@ -182,6 +208,8 @@ export default function TransformationFeed() {
       viewabilityConfig={{
         itemVisiblePercentThreshold: 50,
       }}
+      refreshing={isRefreshing}
+      onRefresh={handleRefresh}
       style={styles.container}
     />
   );

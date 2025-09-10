@@ -36,10 +36,18 @@ export default function CreateScreen() {
     LocalTransformation[]
   >([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadingMessage, setUploadingMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   const handlePhotoTaken = async (photoUri: string) => {
+    // Close camera immediately for better UX
+    setShowCamera(false);
     setIsUploading(true);
+    setUploadingMessage(
+      currentMode === "before"
+        ? "Saving before photo..."
+        : "Saving after photo..."
+    );
 
     try {
       if (currentMode === "before") {
@@ -59,9 +67,11 @@ export default function CreateScreen() {
           uploadResult.url!
         );
 
-        setBeforePhoto(uploadResult.url!);
-        setCurrentTransformationId(transformation.id);
-        setCurrentMode("after");
+        if (transformation) {
+          setBeforePhoto(uploadResult.url!);
+          setCurrentTransformationId(transformation.id);
+          setCurrentMode("after");
+        }
       } else {
         // Upload after photo
         const uploadResult = await uploadPhoto(photoUri, "after");
@@ -83,10 +93,14 @@ export default function CreateScreen() {
         }
 
         setAfterPhoto(uploadResult.url!);
-        Alert.alert("Success!", "Transformation completed! 🎉", [
-          { text: "Create Another", onPress: startNewComparison },
-          { text: "OK" },
-        ]);
+        Alert.alert(
+          "Amazing! ✨",
+          "Your transformation is complete! Ready to inspire others? 🎉",
+          [
+            { text: "Create Another", onPress: startNewComparison },
+            { text: "View in Feed", style: "default" },
+          ]
+        );
 
         // Refresh unfinished transformations
         loadUnfinishedTransformations();
@@ -96,7 +110,7 @@ export default function CreateScreen() {
       Alert.alert("Error", "Failed to save photo. Please try again.");
     } finally {
       setIsUploading(false);
-      setShowCamera(false);
+      setUploadingMessage("");
     }
   };
 
@@ -184,8 +198,8 @@ export default function CreateScreen() {
 
   const getButtonText = () => {
     if (!beforePhoto) return "📸 Take Before Photo";
-    if (!afterPhoto) return "📸 Take After Photo";
-    return "📸 Start New Comparison";
+    if (!afterPhoto) return "✨ Take After Photo";
+    return "🎉 Start New Transformation";
   };
 
   const getButtonAction = () => {
@@ -212,9 +226,9 @@ export default function CreateScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Create Transformation</Text>
+          <Text style={styles.title}>✨ Create Transformation</Text>
           <Text style={styles.subtitle}>
-            Capture your before and after moments
+            Document your journey, one moment at a time
           </Text>
         </View>
 
@@ -260,7 +274,7 @@ export default function CreateScreen() {
             {isUploading ? (
               <>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.buttonText}>Uploading...</Text>
+                <Text style={styles.buttonText}>{uploadingMessage}</Text>
               </>
             ) : (
               <Text style={styles.buttonText}>{getButtonText()}</Text>
@@ -309,11 +323,32 @@ export default function CreateScreen() {
         )}
       </ScrollView>
 
+      {/* Upload Overlay */}
+      {isUploading && (
+        <View style={styles.uploadOverlay}>
+          <View style={styles.uploadModal}>
+            <ActivityIndicator size="large" color="#8b5cf6" />
+            <Text style={styles.uploadModalText}>{uploadingMessage}</Text>
+            <Text style={styles.uploadModalSubtext}>
+              {currentMode === "before"
+                ? "Creating your transformation..."
+                : "Completing your transformation..."}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Camera Modal */}
-      <Modal visible={showCamera} animationType="slide">
+      <Modal
+        visible={showCamera}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowCamera(false)}
+      >
         <CameraComponent
+          mode={currentMode}
           onPhotoTaken={handlePhotoTaken}
-          onCancel={() => setShowCamera(false)}
+          onClose={() => setShowCamera(false)}
         />
       </Modal>
     </View>
@@ -323,7 +358,7 @@ export default function CreateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#0f0f23",
   },
   scrollView: {
     flex: 1,
@@ -335,7 +370,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: "#64748b",
+    color: "#8b5cf6",
   },
   header: {
     padding: 20,
@@ -345,12 +380,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#1e293b",
+    color: "#ffffff",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: "#64748b",
+    color: "#a855f7",
     textAlign: "center",
   },
   currentSection: {
@@ -359,7 +394,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1e293b",
+    color: "#ffffff",
     marginBottom: 16,
   },
   photoGrid: {
@@ -373,7 +408,7 @@ const styles = StyleSheet.create({
   photoLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#374151",
+    color: "#e5e7eb",
     marginBottom: 8,
     textAlign: "center",
   },
@@ -387,9 +422,9 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 3 / 4,
     borderRadius: 12,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#1f1f37",
     borderWidth: 2,
-    borderColor: "#d1d5db",
+    borderColor: "#8b5cf6",
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
@@ -400,18 +435,23 @@ const styles = StyleSheet.create({
   },
   placeholderSubtext: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#a855f7",
     textAlign: "center",
   },
   button: {
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#8b5cf6",
     paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    shadowColor: "#8b5cf6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   buttonDisabled: {
     backgroundColor: "#9ca3af",
@@ -426,17 +466,19 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   transformationCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: "#1f1f37",
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowColor: "#8b5cf6",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#374151",
   },
   thumbnailPhoto: {
     width: 60,
@@ -451,12 +493,12 @@ const styles = StyleSheet.create({
   transformationDate: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1e293b",
+    color: "#ffffff",
     marginBottom: 4,
   },
   transformationStatus: {
     fontSize: 14,
-    color: "#f59e0b",
+    color: "#fbbf24",
   },
   transformationActions: {
     gap: 8,
@@ -482,5 +524,43 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  uploadOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 15, 35, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  uploadModal: {
+    backgroundColor: "#1f1f37",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    shadowColor: "#8b5cf6",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: "#374151",
+    minWidth: 250,
+  },
+  uploadModalText: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  uploadModalSubtext: {
+    color: "#a855f7",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
   },
 });

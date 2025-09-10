@@ -22,11 +22,6 @@
       "package": "com.nielss94.beforeafter",
       "versionCode": 1
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [
