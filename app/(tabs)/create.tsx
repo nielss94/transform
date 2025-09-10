@@ -5,6 +5,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,8 +13,11 @@ import {
 } from "react-native";
 
 import CameraComponent from "@/components/CameraComponent";
+import { DesignSystem } from "@/constants/Colors";
 import { TransformationService } from "@/lib/database";
 import { initializeStorage, uploadPhoto } from "@/lib/storage";
+
+// const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 type PhotoMode = "before" | "after";
 
@@ -62,16 +66,16 @@ export default function CreateScreen() {
           return;
         }
 
-        // Create new transformation record
-        const transformation = await TransformationService.createTransformation(
-          uploadResult.url!
-        );
-
-        if (transformation) {
-          setBeforePhoto(uploadResult.url!);
-          setCurrentTransformationId(transformation.id);
-          setCurrentMode("after");
+        // Create new transformation record if none exists
+        if (!currentTransformationId) {
+          const transformation =
+            await TransformationService.createTransformation(uploadResult.url!);
+          if (transformation) {
+            setCurrentTransformationId(transformation.id);
+          }
         }
+
+        setBeforePhoto(uploadResult.url!);
       } else {
         // Upload after photo
         const uploadResult = await uploadPhoto(photoUri, "after");
@@ -84,8 +88,18 @@ export default function CreateScreen() {
           return;
         }
 
-        // Update transformation with after photo
-        if (currentTransformationId) {
+        // Create transformation if none exists, or update existing one
+        if (!currentTransformationId && beforePhoto) {
+          const transformation =
+            await TransformationService.createTransformation(beforePhoto);
+          if (transformation) {
+            setCurrentTransformationId(transformation.id);
+            await TransformationService.updateTransformation(
+              transformation.id,
+              uploadResult.url!
+            );
+          }
+        } else if (currentTransformationId) {
           await TransformationService.updateTransformation(
             currentTransformationId,
             uploadResult.url!
@@ -93,14 +107,18 @@ export default function CreateScreen() {
         }
 
         setAfterPhoto(uploadResult.url!);
-        Alert.alert(
-          "Amazing! ✨",
-          "Your transformation is complete! Ready to inspire others? 🎉",
-          [
-            { text: "Create Another", onPress: startNewComparison },
-            { text: "View in Feed", style: "default" },
-          ]
-        );
+
+        // Show completion celebration
+        if (beforePhoto) {
+          Alert.alert(
+            "🎉 Transformation Complete!",
+            "Your before & after story is ready to inspire others!",
+            [
+              { text: "Create Another", onPress: startNewTransformation },
+              { text: "View in Feed", style: "default" },
+            ]
+          );
+        }
 
         // Refresh unfinished transformations
         loadUnfinishedTransformations();
@@ -114,11 +132,12 @@ export default function CreateScreen() {
     }
   };
 
-  const openCamera = () => {
+  const openCameraForSlot = (mode: PhotoMode) => {
+    setCurrentMode(mode);
     setShowCamera(true);
   };
 
-  const startNewComparison = () => {
+  const startNewTransformation = () => {
     setBeforePhoto(null);
     setAfterPhoto(null);
     setCurrentTransformationId(null);
@@ -184,7 +203,7 @@ export default function CreateScreen() {
 
               // Clear current transformation if it's the one being deleted
               if (currentTransformationId === id) {
-                startNewComparison();
+                startNewTransformation();
               }
             } catch (error) {
               console.error("Failed to delete transformation:", error);
@@ -196,17 +215,9 @@ export default function CreateScreen() {
     );
   };
 
-  const getButtonText = () => {
-    if (!beforePhoto) return "📸 Take Before Photo";
-    if (!afterPhoto) return "✨ Take After Photo";
-    return "🎉 Start New Transformation";
-  };
-
-  const getButtonAction = () => {
-    if (!beforePhoto || !afterPhoto) {
-      return openCamera;
-    }
-    return startNewComparison;
+  // Helper function to determine if transformation is complete
+  const isTransformationComplete = () => {
+    return beforePhoto && afterPhoto;
   };
 
   if (isLoading) {
@@ -220,120 +231,167 @@ export default function CreateScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-      >
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={DesignSystem.colors.background.primary}
+      />
+
+      {/* Main Content */}
+      <View style={styles.mainContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>✨ Create Transformation</Text>
+          <Text style={styles.title}>Your Transformation</Text>
           <Text style={styles.subtitle}>
-            Document your journey, one moment at a time
+            Capture your before & after moments
           </Text>
         </View>
 
-        {/* Current Transformation */}
-        <View style={styles.currentSection}>
-          <Text style={styles.sectionTitle}>Current Transformation</Text>
-
-          <View style={styles.photoGrid}>
-            <View style={styles.photoContainer}>
-              <Text style={styles.photoLabel}>Before</Text>
-              {beforePhoto ? (
-                <Image source={{ uri: beforePhoto }} style={styles.photo} />
-              ) : (
-                <View style={styles.placeholderPhoto}>
-                  <Text style={styles.placeholderText}>📸</Text>
-                  <Text style={styles.placeholderSubtext}>
-                    Take before photo
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.photoContainer}>
-              <Text style={styles.photoLabel}>After</Text>
-              {afterPhoto ? (
-                <Image source={{ uri: afterPhoto }} style={styles.photo} />
-              ) : (
-                <View style={styles.placeholderPhoto}>
-                  <Text style={styles.placeholderText}>✨</Text>
-                  <Text style={styles.placeholderSubtext}>
-                    {beforePhoto ? "Take after photo" : "Take before first"}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-
+        {/* Photo Slots - Instagram Stories Style */}
+        <View style={styles.photoSlotsContainer}>
+          {/* Before Photo Slot */}
           <TouchableOpacity
-            style={[styles.button, isUploading && styles.buttonDisabled]}
-            onPress={getButtonAction()}
-            disabled={isUploading}
+            style={styles.photoSlot}
+            onPress={() => openCameraForSlot("before")}
+            activeOpacity={0.8}
           >
-            {isUploading ? (
+            {beforePhoto ? (
               <>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.buttonText}>{uploadingMessage}</Text>
+                <Image source={{ uri: beforePhoto }} style={styles.slotImage} />
+                <View style={styles.imageOverlay}>
+                  <View style={styles.labelBadge}>
+                    <Text style={styles.labelText}>BEFORE</Text>
+                  </View>
+                  <TouchableOpacity style={styles.editButton}>
+                    <Text style={styles.editButtonText}>✏️</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             ) : (
-              <Text style={styles.buttonText}>{getButtonText()}</Text>
+              <View style={styles.emptySlot}>
+                <View style={styles.cameraIconContainer}>
+                  <Text style={styles.cameraIcon}>📷</Text>
+                </View>
+                <Text style={styles.slotLabel}>BEFORE</Text>
+                <Text style={styles.slotHint}>Tap to capture</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <Text style={styles.dividerText}>VS</Text>
+          </View>
+
+          {/* After Photo Slot */}
+          <TouchableOpacity
+            style={styles.photoSlot}
+            onPress={() => openCameraForSlot("after")}
+            activeOpacity={0.8}
+          >
+            {afterPhoto ? (
+              <>
+                <Image source={{ uri: afterPhoto }} style={styles.slotImage} />
+                <View style={styles.imageOverlay}>
+                  <View style={[styles.labelBadge, styles.labelBadgeAfter]}>
+                    <Text style={styles.labelText}>AFTER</Text>
+                  </View>
+                  <TouchableOpacity style={styles.editButton}>
+                    <Text style={styles.editButtonText}>✏️</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.emptySlot}>
+                <View style={styles.cameraIconContainer}>
+                  <Text style={styles.cameraIcon}>✨</Text>
+                </View>
+                <Text style={styles.slotLabel}>AFTER</Text>
+                <Text style={styles.slotHint}>Tap to capture</Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Unfinished Transformations */}
+        {/* Action Buttons */}
+        <View style={styles.actionContainer}>
+          {isTransformationComplete() ? (
+            <>
+              <TouchableOpacity style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>
+                  Share Transformation
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={startNewTransformation}
+              >
+                <Text style={styles.secondaryButtonText}>Start New</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.progressContainer}>
+              <Text style={styles.progressText}>
+                {!beforePhoto &&
+                  !afterPhoto &&
+                  "Take your first photo to begin"}
+                {beforePhoto &&
+                  !afterPhoto &&
+                  "Great! Now capture your after photo"}
+                {!beforePhoto &&
+                  afterPhoto &&
+                  "Add your before photo to complete the story"}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Draft Transformations */}
         {unfinishedTransformations.length > 0 && (
-          <View style={styles.unfinishedSection}>
-            <Text style={styles.sectionTitle}>
-              Unfinished Transformations ({unfinishedTransformations.length})
+          <ScrollView
+            style={styles.draftsContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.draftsTitle}>
+              Drafts ({unfinishedTransformations.length})
             </Text>
 
             {unfinishedTransformations.map((transformation) => (
-              <View key={transformation.id} style={styles.transformationCard}>
+              <TouchableOpacity
+                key={transformation.id}
+                style={styles.draftCard}
+                onPress={() => continueTransformation(transformation)}
+              >
                 <Image
                   source={{ uri: transformation.beforePhoto }}
-                  style={styles.thumbnailPhoto}
+                  style={styles.draftThumbnail}
                 />
-                <View style={styles.transformationInfo}>
-                  <Text style={styles.transformationDate}>
+                <View style={styles.draftInfo}>
+                  <Text style={styles.draftDate}>
                     {transformation.createdAt.toLocaleDateString()}
                   </Text>
-                  <Text style={styles.transformationStatus}>
-                    Waiting for after photo
-                  </Text>
+                  <Text style={styles.draftStatus}>Missing after photo</Text>
                 </View>
-                <View style={styles.transformationActions}>
-                  <TouchableOpacity
-                    style={styles.continueButton}
-                    onPress={() => continueTransformation(transformation)}
-                  >
-                    <Text style={styles.continueButtonText}>Continue</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => deleteTransformation(transformation.id)}
-                  >
-                    <Text style={styles.deleteButtonText}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                <TouchableOpacity
+                  style={styles.draftDeleteButton}
+                  onPress={() => deleteTransformation(transformation.id)}
+                >
+                  <Text style={styles.draftDeleteText}>×</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
 
       {/* Upload Overlay */}
       {isUploading && (
         <View style={styles.uploadOverlay}>
           <View style={styles.uploadModal}>
-            <ActivityIndicator size="large" color="#8b5cf6" />
+            <ActivityIndicator
+              size="large"
+              color={DesignSystem.colors.interactive.primary}
+            />
             <Text style={styles.uploadModalText}>{uploadingMessage}</Text>
-            <Text style={styles.uploadModalSubtext}>
-              {currentMode === "before"
-                ? "Creating your transformation..."
-                : "Completing your transformation..."}
-            </Text>
           </View>
         </View>
       )}
@@ -358,209 +416,299 @@ export default function CreateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f23",
+    backgroundColor: DesignSystem.colors.background.primary,
   },
-  scrollView: {
-    flex: 1,
-  },
+
+  // Loading State
   loadingContainer: {
     justifyContent: "center",
     alignItems: "center",
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#8b5cf6",
+    marginTop: DesignSystem.spacing.md,
+    fontSize: DesignSystem.typography.fontSize.md,
+    color: DesignSystem.colors.interactive.primary,
+    fontWeight: DesignSystem.typography.fontWeight.medium,
   },
+
+  // Main Content
+  mainContent: {
+    flex: 1,
+    paddingTop: 60, // Status bar + padding
+  },
+
+  // Header
   header: {
-    padding: 20,
-    paddingTop: 60,
+    paddingHorizontal: DesignSystem.spacing.lg,
+    paddingBottom: DesignSystem.spacing.xl,
     alignItems: "center",
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#ffffff",
-    marginBottom: 8,
+    fontSize: DesignSystem.typography.fontSize.xxl,
+    fontWeight: DesignSystem.typography.fontWeight.bold,
+    color: DesignSystem.colors.text.primary,
+    marginBottom: DesignSystem.spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#a855f7",
+    fontSize: DesignSystem.typography.fontSize.md,
+    color: DesignSystem.colors.text.secondary,
     textAlign: "center",
   },
-  currentSection: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#ffffff",
-    marginBottom: 16,
-  },
-  photoGrid: {
+
+  // Photo Slots Container
+  photoSlotsContainer: {
     flexDirection: "row",
-    gap: 16,
-    marginBottom: 24,
+    paddingHorizontal: DesignSystem.spacing.lg,
+    marginBottom: DesignSystem.spacing.xl,
+    alignItems: "center",
   },
-  photoContainer: {
+
+  // Individual Photo Slot
+  photoSlot: {
     flex: 1,
-  },
-  photoLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  photo: {
-    width: "100%",
     aspectRatio: 3 / 4,
-    borderRadius: 12,
-    backgroundColor: "#e5e7eb",
+    borderRadius: DesignSystem.radius.lg,
+    overflow: "hidden",
   },
-  placeholderPhoto: {
+
+  // Slot Image (when photo is taken)
+  slotImage: {
     width: "100%",
-    aspectRatio: 3 / 4,
-    borderRadius: 12,
-    backgroundColor: "#1f1f37",
+    height: "100%",
+  },
+
+  // Image Overlay (for labels and edit button)
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: DesignSystem.spacing.md,
+    justifyContent: "space-between",
+  },
+
+  // Label Badges
+  labelBadge: {
+    backgroundColor: DesignSystem.colors.interactive.primary,
+    paddingHorizontal: DesignSystem.spacing.md,
+    paddingVertical: DesignSystem.spacing.xs,
+    borderRadius: DesignSystem.radius.full,
+    alignSelf: "flex-start",
+  },
+  labelBadgeAfter: {
+    backgroundColor: DesignSystem.colors.interactive.secondary,
+  },
+  labelText: {
+    color: DesignSystem.colors.text.primary,
+    fontSize: DesignSystem.typography.fontSize.xs,
+    fontWeight: DesignSystem.typography.fontWeight.bold,
+    letterSpacing: 1,
+  },
+
+  // Edit Button
+  editButton: {
+    backgroundColor: DesignSystem.colors.background.overlay,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "flex-end",
+  },
+  editButtonText: {
+    fontSize: DesignSystem.typography.fontSize.md,
+  },
+
+  // Empty Slot (when no photo)
+  emptySlot: {
+    flex: 1,
+    backgroundColor: DesignSystem.colors.background.secondary,
     borderWidth: 2,
-    borderColor: "#8b5cf6",
+    borderColor: DesignSystem.colors.border.primary,
     borderStyle: "dashed",
+    borderRadius: DesignSystem.radius.lg,
     justifyContent: "center",
     alignItems: "center",
+    padding: DesignSystem.spacing.lg,
   },
-  placeholderText: {
-    fontSize: 32,
-    marginBottom: 8,
+
+  // Camera Icon Container
+  cameraIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: DesignSystem.colors.background.tertiary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: DesignSystem.spacing.md,
   },
-  placeholderSubtext: {
-    fontSize: 14,
-    color: "#a855f7",
+  cameraIcon: {
+    fontSize: 28,
+  },
+
+  // Slot Labels
+  slotLabel: {
+    fontSize: DesignSystem.typography.fontSize.sm,
+    fontWeight: DesignSystem.typography.fontWeight.bold,
+    color: DesignSystem.colors.text.primary,
+    marginBottom: DesignSystem.spacing.xs,
+    letterSpacing: 1,
+  },
+  slotHint: {
+    fontSize: DesignSystem.typography.fontSize.xs,
+    color: DesignSystem.colors.text.tertiary,
     textAlign: "center",
   },
-  button: {
-    backgroundColor: "#8b5cf6",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    flexDirection: "row",
+
+  // VS Divider
+  divider: {
+    width: 40,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    shadowColor: "#8b5cf6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  buttonDisabled: {
-    backgroundColor: "#9ca3af",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  unfinishedSection: {
-    padding: 20,
-    paddingTop: 0,
-  },
-  transformationCard: {
-    backgroundColor: "#1f1f37",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    shadowColor: "#8b5cf6",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+  dividerText: {
+    fontSize: DesignSystem.typography.fontSize.sm,
+    fontWeight: DesignSystem.typography.fontWeight.bold,
+    color: DesignSystem.colors.text.secondary,
+    backgroundColor: DesignSystem.colors.background.primary,
+    paddingHorizontal: DesignSystem.spacing.sm,
+    paddingVertical: DesignSystem.spacing.xs,
+    borderRadius: DesignSystem.radius.sm,
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: DesignSystem.colors.border.primary,
   },
-  thumbnailPhoto: {
-    width: 60,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: "#e5e7eb",
+
+  // Action Container
+  actionContainer: {
+    paddingHorizontal: DesignSystem.spacing.lg,
+    marginBottom: DesignSystem.spacing.xl,
   },
-  transformationInfo: {
+
+  // Primary Button
+  primaryButton: {
+    backgroundColor: DesignSystem.colors.interactive.primary,
+    paddingVertical: DesignSystem.spacing.md,
+    paddingHorizontal: DesignSystem.spacing.lg,
+    borderRadius: DesignSystem.radius.md,
+    alignItems: "center",
+    marginBottom: DesignSystem.spacing.md,
+    ...DesignSystem.shadows.sm,
+  },
+  primaryButtonText: {
+    color: DesignSystem.colors.text.primary,
+    fontSize: DesignSystem.typography.fontSize.lg,
+    fontWeight: DesignSystem.typography.fontWeight.semibold,
+  },
+
+  // Secondary Button
+  secondaryButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: DesignSystem.colors.border.secondary,
+    paddingVertical: DesignSystem.spacing.md,
+    paddingHorizontal: DesignSystem.spacing.lg,
+    borderRadius: DesignSystem.radius.md,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: DesignSystem.colors.text.secondary,
+    fontSize: DesignSystem.typography.fontSize.md,
+    fontWeight: DesignSystem.typography.fontWeight.medium,
+  },
+
+  // Progress Container
+  progressContainer: {
+    backgroundColor: DesignSystem.colors.background.secondary,
+    padding: DesignSystem.spacing.lg,
+    borderRadius: DesignSystem.radius.md,
+    borderWidth: 1,
+    borderColor: DesignSystem.colors.border.primary,
+  },
+  progressText: {
+    color: DesignSystem.colors.text.secondary,
+    fontSize: DesignSystem.typography.fontSize.md,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+
+  // Drafts Section
+  draftsContainer: {
     flex: 1,
-    marginLeft: 12,
+    paddingHorizontal: DesignSystem.spacing.lg,
   },
-  transformationDate: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-    marginBottom: 4,
+  draftsTitle: {
+    fontSize: DesignSystem.typography.fontSize.lg,
+    fontWeight: DesignSystem.typography.fontWeight.semibold,
+    color: DesignSystem.colors.text.primary,
+    marginBottom: DesignSystem.spacing.md,
   },
-  transformationStatus: {
-    fontSize: 14,
-    color: "#fbbf24",
+
+  // Draft Card
+  draftCard: {
+    flexDirection: "row",
+    backgroundColor: DesignSystem.colors.background.secondary,
+    borderRadius: DesignSystem.radius.md,
+    padding: DesignSystem.spacing.md,
+    marginBottom: DesignSystem.spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: DesignSystem.colors.border.primary,
   },
-  transformationActions: {
-    gap: 8,
+  draftThumbnail: {
+    width: 50,
+    height: 60,
+    borderRadius: DesignSystem.radius.sm,
+    backgroundColor: DesignSystem.colors.gray[700],
   },
-  continueButton: {
-    backgroundColor: "#10b981",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  draftInfo: {
+    flex: 1,
+    marginLeft: DesignSystem.spacing.md,
   },
-  continueButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
+  draftDate: {
+    fontSize: DesignSystem.typography.fontSize.md,
+    fontWeight: DesignSystem.typography.fontWeight.medium,
+    color: DesignSystem.colors.text.primary,
+    marginBottom: DesignSystem.spacing.xs,
   },
-  deleteButton: {
-    backgroundColor: "#ef4444",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  draftStatus: {
+    fontSize: DesignSystem.typography.fontSize.sm,
+    color: DesignSystem.colors.interactive.warning,
   },
-  deleteButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
+  draftDeleteButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: DesignSystem.colors.interactive.error,
+    justifyContent: "center",
+    alignItems: "center",
   },
+  draftDeleteText: {
+    color: DesignSystem.colors.text.primary,
+    fontSize: DesignSystem.typography.fontSize.lg,
+    fontWeight: DesignSystem.typography.fontWeight.bold,
+    lineHeight: 20,
+  },
+
+  // Upload Overlay
   uploadOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(15, 15, 35, 0.9)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: DesignSystem.colors.background.overlay,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 1000,
   },
   uploadModal: {
-    backgroundColor: "#1f1f37",
-    borderRadius: 20,
-    padding: 30,
+    backgroundColor: DesignSystem.colors.background.tertiary,
+    borderRadius: DesignSystem.radius.lg,
+    padding: DesignSystem.spacing.xl,
     alignItems: "center",
-    shadowColor: "#8b5cf6",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 12,
+    minWidth: 200,
     borderWidth: 1,
-    borderColor: "#374151",
-    minWidth: 250,
+    borderColor: DesignSystem.colors.border.primary,
+    ...DesignSystem.shadows.lg,
   },
   uploadModalText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 16,
-    textAlign: "center",
-  },
-  uploadModalSubtext: {
-    color: "#a855f7",
-    fontSize: 14,
-    marginTop: 8,
+    color: DesignSystem.colors.text.primary,
+    fontSize: DesignSystem.typography.fontSize.lg,
+    fontWeight: DesignSystem.typography.fontWeight.semibold,
+    marginTop: DesignSystem.spacing.md,
     textAlign: "center",
   },
 });
