@@ -11,11 +11,22 @@ export class TransformationService {
     beforePhotoUrl: string
   ): Promise<Transformation | null> {
     try {
+      // Get the current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        console.error("User not authenticated");
+        return null;
+      }
+
       const { data, error } = await supabase
         .from("transformations")
         .insert({
           before_photo_url: beforePhotoUrl,
           after_photo_url: null,
+          user_id: user.id,
         })
         .select()
         .single();
@@ -129,13 +140,24 @@ export class TransformationService {
   }
 
   /**
-   * Get incomplete transformations (missing after photo)
+   * Get incomplete transformations (missing after photo) for the current user
    */
   static async getIncompleteTransformations(): Promise<Transformation[]> {
     try {
+      // Get the current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        console.error("User not authenticated");
+        return [];
+      }
+
       const { data, error } = await supabase
         .from("transformations")
         .select("*")
+        .eq("user_id", user.id)
         .is("after_photo_url", null)
         .order("created_at", { ascending: false });
 
@@ -185,6 +207,46 @@ export class TransformationService {
     } catch (error) {
       console.error("Error fetching transformation:", error);
       return null;
+    }
+  }
+
+  /**
+   * Get all transformations for the current user
+   */
+  static async getUserTransformations(): Promise<Transformation[]> {
+    try {
+      // Get the current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        console.error("User not authenticated");
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from("transformations")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching user transformations:", error);
+        return [];
+      }
+
+      return data.map((item: SupabaseTransformation) => ({
+        id: item.id,
+        before_photo_url: item.before_photo_url,
+        after_photo_url: item.after_photo_url || undefined,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        user_id: item.user_id || undefined,
+      }));
+    } catch (error) {
+      console.error("Error fetching user transformations:", error);
+      return [];
     }
   }
 }

@@ -20,7 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.nielss94.beforeafter",
-      "versionCode": 1
+      "versionCode": 2
     },
     "plugins": [
       "expo-router",
@@ -36,6 +36,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "33bbcd53-9be6-4cc5-ae59-cae7c6d89789"
+      }
     }
   }
 }

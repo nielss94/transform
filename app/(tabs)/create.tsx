@@ -231,10 +231,7 @@ export default function CreateScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={DesignSystem.colors.background.primary}
-      />
+      <StatusBar barStyle="light-content" />
 
       {/* Main Content */}
       <View style={styles.mainContent}>
