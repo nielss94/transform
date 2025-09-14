@@ -88,11 +88,11 @@ export class TransformationService {
   }
 
   /**
-   * Fetches all completed transformations (for display in feed)
+   * Fetches all completed transformations (for display in feed) with user information
    */
   static async getCompletedTransformations(): Promise<Transformation[]> {
     try {
-      const { data, error } = await supabase
+      const { data: transformations, error } = await supabase
         .from("transformations")
         .select("*")
         .not("after_photo_url", "is", null)
@@ -103,14 +103,58 @@ export class TransformationService {
         return [];
       }
 
-      return data.map((item: SupabaseTransformation) => ({
-        id: item.id,
-        before_photo_url: item.before_photo_url,
-        after_photo_url: item.after_photo_url || undefined,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-        user_id: item.user_id || undefined,
-      }));
+      // Get current user to identify their own posts
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      return transformations.map((item: SupabaseTransformation) => {
+        let userName = "Anonymous User";
+        let userAvatar = undefined;
+
+        // If this is the current user's post, show their info
+        if (currentUser && item.user_id === currentUser.id) {
+          userName =
+            currentUser.user_metadata?.full_name ||
+            currentUser.user_metadata?.name ||
+            currentUser.email?.split("@")[0] ||
+            "You";
+          userAvatar =
+            currentUser.user_metadata?.avatar_url ||
+            currentUser.user_metadata?.picture;
+        } else {
+          // For other users, generate a consistent name based on user_id
+          if (item.user_id) {
+            // Create a simple hash of the user_id to generate consistent names
+            const hash = item.user_id.split("-")[0];
+            const names = [
+              "Alex",
+              "Jordan",
+              "Casey",
+              "Riley",
+              "Avery",
+              "Quinn",
+              "Sage",
+              "River",
+              "Phoenix",
+              "Rowan",
+            ];
+            const nameIndex = parseInt(hash.slice(-1), 16) % names.length;
+            userName = names[nameIndex];
+          }
+        }
+
+        return {
+          id: item.id,
+          before_photo_url: item.before_photo_url,
+          after_photo_url: item.after_photo_url || undefined,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          user_id: item.user_id || undefined,
+          user_name: userName,
+          user_avatar: userAvatar,
+        };
+      });
     } catch (error) {
       console.error("Error fetching transformations:", error);
       return [];

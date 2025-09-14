@@ -1,4 +1,3 @@
-import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import {
   AuthUser,
@@ -80,61 +79,159 @@ export class AuthService {
   }
 
   /**
-   * Sign in with Google
+   * Sign in with Google using Supabase OAuth with proper deep link handling
    */
   static async signInWithGoogle(): Promise<AuthResult> {
     try {
-      const redirectUrl = AuthSession.makeRedirectUri({
-        useProxy: true,
+      // Create the deep link URL for OAuth callback
+      // Use manual construction to ensure correct format
+      const redirectTo = "beforeafter://auth/callback";
+
+      console.log("🔍 DEBUG: OAuth redirect URL:", redirectTo);
+      console.log("🔍 DEBUG: Expected format: beforeafter://auth/callback");
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: false,
+        },
       });
 
-      const authUrl = `${
-        process.env.EXPO_PUBLIC_SUPABASE_URL
-      }/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(
-        redirectUrl
-      )}`;
+      console.log("🔍 DEBUG: Supabase OAuth response:", { data, error });
 
-      const result = await AuthSession.startAsync({
-        authUrl,
-        returnUrl: redirectUrl,
-      });
+      if (error) {
+        console.error("❌ Google auth error:", error);
+        return {
+          success: false,
+          error: error.message || "Google authentication failed",
+        };
+      }
 
-      if (result.type === "success") {
-        const { url } = result;
-        const urlParams = new URLSearchParams(
-          url.split("#")[1] || url.split("?")[1]
+      // For mobile OAuth, the URL needs to be opened in a browser
+      if (data?.url) {
+        console.log("🔍 DEBUG: Opening OAuth URL:", data.url);
+
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectTo
         );
 
-        const accessToken = urlParams.get("access_token");
-        const refreshToken = urlParams.get("refresh_token");
+        console.log(
+          "🔍 DEBUG: WebBrowser result:",
+          JSON.stringify(result, null, 2)
+        );
 
-        if (accessToken) {
-          // Set the session in Supabase
-          const { data: authData, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken || "",
+        if (result.type === "success") {
+          console.log("✅ Browser auth successful");
+          console.log("🔍 DEBUG: OAuth result URL:", result.url);
+
+          // If we have a URL with tokens, process it directly
+          if (result.url && result.url.includes("#access_token=")) {
+            try {
+              // Extract tokens from the URL
+              const fragment = result.url.split("#")[1];
+              if (fragment) {
+                const params = new URLSearchParams(fragment);
+                const accessToken = params.get("access_token");
+                const refreshToken = params.get("refresh_token");
+
+                console.log("🔍 DEBUG: Direct token extraction:", {
+                  hasAccessToken: !!accessToken,
+                  hasRefreshToken: !!refreshToken,
+                });
+
+                if (accessToken && refreshToken) {
+                  // Set session directly
+                  const { data, error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                  });
+
+                  console.log("🔍 DEBUG: Direct setSession result:", {
+                    hasSession: !!data?.session,
+                    error,
+                    userId: data?.session?.user?.id,
+                  });
+
+                  if (error) {
+                    console.error("❌ Error setting session directly:", error);
+                    return {
+                      success: false,
+                      error: `Session error: ${error.message}`,
+                    };
+                  }
+
+                  if (data?.session) {
+                    console.log("✅ Session established directly!");
+                    return {
+                      success: true,
+                      user: data.session.user as AuthUser,
+                      session: data.session as SupabaseAuthSession,
+                    };
+                  }
+                }
+              }
+            } catch (tokenError) {
+              console.error("❌ Error processing tokens directly:", tokenError);
+            }
+          }
+
+          // Fallback: wait and check for session
+          console.log("🔍 DEBUG: Falling back to session check...");
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          const { data: session, error: sessionError } =
+            await supabase.auth.getSession();
+
+          console.log("🔍 DEBUG: Fallback session check:", {
+            hasSession: !!session?.session,
+            sessionError,
+            userId: session?.session?.user?.id,
           });
 
-          if (error) {
+          if (session?.session) {
+            console.log("✅ Found session in fallback!");
             return {
-              success: false,
-              error: error.message,
+              success: true,
+              user: session.session.user as AuthUser,
+              session: session.session as SupabaseAuthSession,
             };
           }
 
+          // If still no session, return error
           return {
-            success: true,
-            user: authData.user as AuthUser,
-            session: authData.session as SupabaseAuthSession,
+            success: false,
+            error: "Failed to establish session after authentication",
+          };
+        } else if (result.type === "cancel") {
+          console.log("⚠️ User cancelled authentication");
+          return {
+            success: false,
+            error: "Authentication was cancelled by user",
+          };
+        } else if (result.type === "dismiss") {
+          console.log("⚠️ Authentication dismissed");
+          return {
+            success: false,
+            error: "Authentication was dismissed",
+          };
+        } else {
+          console.log("❌ Unexpected result type:", result.type);
+          return {
+            success: false,
+            error: `Unexpected authentication result: ${result.type}`,
           };
         }
+      } else {
+        console.error("❌ No OAuth URL received from Supabase");
+        return {
+          success: false,
+          error: "No OAuth URL received from Supabase",
+        };
       }
-
-      return {
-        success: false,
-        error: "Google authentication was cancelled or failed",
-      };
     } catch (error: any) {
+      console.error("❌ Google auth exception:", error);
       return {
         success: false,
         error: error.message || "Google authentication failed",

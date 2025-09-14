@@ -94,9 +94,23 @@ function TransformationCard({
 
       {/* Transformation info */}
       <View style={styles.info}>
-        <Text style={styles.date}>
-          {new Date(transformation.created_at).toLocaleDateString()}
-        </Text>
+        <View style={styles.userInfo}>
+          {transformation.user_avatar && (
+            <Image
+              source={{ uri: transformation.user_avatar }}
+              style={styles.userAvatar}
+              contentFit="cover"
+            />
+          )}
+          <View style={styles.userDetails}>
+            <Text style={styles.userName}>
+              {transformation.user_name || "Anonymous"}
+            </Text>
+            <Text style={styles.date}>
+              {new Date(transformation.created_at).toLocaleDateString()}
+            </Text>
+          </View>
+        </View>
         {transformation.after_photo_url ? (
           <Text style={styles.status}>✨ Complete</Text>
         ) : (
@@ -268,12 +282,39 @@ const styles = StyleSheet.create({
     bottom: 100,
     left: DesignSystem.spacing.lg,
     right: DesignSystem.spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: DesignSystem.spacing.sm,
+    borderWidth: 2,
+    borderColor: DesignSystem.colors.text.primary,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    color: DesignSystem.colors.text.primary,
+    fontSize: DesignSystem.typography.fontSize.lg,
+    fontWeight: DesignSystem.typography.fontWeight.bold,
+    marginBottom: 2,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   date: {
-    color: DesignSystem.colors.text.primary,
-    fontSize: DesignSystem.typography.fontSize.md,
+    color: DesignSystem.colors.text.secondary,
+    fontSize: DesignSystem.typography.fontSize.sm,
     fontWeight: DesignSystem.typography.fontWeight.medium,
-    marginBottom: DesignSystem.spacing.sm,
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,

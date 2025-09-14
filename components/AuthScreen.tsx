@@ -209,9 +209,7 @@ export default function AuthScreen() {
               <>
                 <Text style={styles.googleIcon}>G</Text>
                 <Text style={styles.googleButtonText}>
-                  {mode === "signin"
-                    ? "Sign in with Google"
-                    : "Sign up with Google"}
+                  Continue with Google
                 </Text>
               </>
             )}
