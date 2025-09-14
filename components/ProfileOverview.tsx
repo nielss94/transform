@@ -17,6 +17,7 @@ interface ProfileOverviewProps {
   userName: string;
   transformations: Transformation[];
   onTransformationPress: (transformationId: string, index: number) => void;
+  isOwnProfile?: boolean;
 }
 
 interface TransformationGridItemProps {
@@ -63,6 +64,7 @@ export default function ProfileOverview({
   userName,
   transformations,
   onTransformationPress,
+  isOwnProfile = false,
 }: ProfileOverviewProps) {
   const completedCount = transformations.filter(
     (t) => t.after_photo_url
@@ -104,7 +106,9 @@ export default function ProfileOverview({
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>No transformations yet</Text>
           <Text style={styles.emptySubtitle}>
-            This user hasn't shared any transformations
+            {isOwnProfile
+              ? "Start your transformation journey by creating your first post"
+              : "This user hasn't shared any transformations"}
           </Text>
         </View>
       </View>
