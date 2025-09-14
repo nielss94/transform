@@ -231,7 +231,11 @@ export default function CreateScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
 
       {/* Main Content */}
       <View style={styles.mainContent}>

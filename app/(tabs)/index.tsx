@@ -7,10 +7,7 @@ import { DesignSystem } from "@/constants/Colors";
 export default function FeedScreen() {
   return (
     <View style={styles.container}>
-      <StatusBar
-        style="light"
-        backgroundColor={DesignSystem.colors.background.primary}
-      />
+      <StatusBar style="light" />
       <TransformationFeed />
     </View>
   );

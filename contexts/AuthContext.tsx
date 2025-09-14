@@ -1,5 +1,6 @@
 import { AuthResult, AuthService } from "@/lib/auth";
 import { AuthSession, AuthUser, SignInData, SignUpData } from "@/lib/supabase";
+import { useRouter } from "expo-router";
 import React, {
   createContext,
   ReactNode,
@@ -35,6 +36,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +84,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Cleanup subscription on unmount
     return () => subscription?.unsubscribe();
   }, []);
+
+  // Redirect to main app when authenticated
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      // Simple replace without dismissAll to avoid navigation errors
+      router.replace("/(tabs)");
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const signUpWithEmail = async (data: SignUpData): Promise<AuthResult> => {
     setIsLoading(true);

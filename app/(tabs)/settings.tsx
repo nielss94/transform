@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-export default function ProfileScreen() {
+export default function SettingsScreen() {
   const { user, signOut } = useAuth();
 
   const handleSignOut = async () => {
@@ -55,7 +55,11 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -63,7 +67,7 @@ export default function ProfileScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
+          <Text style={styles.title}>Settings</Text>
         </View>
 
         {/* User Info Card */}

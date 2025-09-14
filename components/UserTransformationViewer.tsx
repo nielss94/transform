@@ -1,9 +1,8 @@
-import { useFocusEffect } from "@react-navigation/native";
+import { DesignSystem } from "@/constants/Colors";
+import { Transformation } from "@/lib/supabase";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   StyleSheet,
@@ -13,22 +12,24 @@ import {
   ViewToken,
 } from "react-native";
 
-import { DesignSystem } from "@/constants/Colors";
-import { TransformationService } from "@/lib/database";
-import { Transformation } from "@/lib/supabase";
-
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+interface UserTransformationViewerProps {
+  transformations: Transformation[];
+  initialIndex: number;
+  userName: string;
+}
 
 interface TransformationCardProps {
   transformation: Transformation;
   isActive: boolean;
-  onUserPress?: (userId: string, userName: string) => void;
+  userName: string;
 }
 
 function TransformationCard({
   transformation,
   isActive,
-  onUserPress,
+  userName,
 }: TransformationCardProps) {
   const [showAfter, setShowAfter] = useState(false);
   const [lastManualToggle, setLastManualToggle] = useState(0);
@@ -98,36 +99,8 @@ function TransformationCard({
       {/* Transformation info */}
       <View style={styles.info}>
         <View style={styles.userInfo}>
-          {transformation.user_avatar && (
-            <Image
-              source={{ uri: transformation.user_avatar }}
-              style={styles.userAvatar}
-              contentFit="cover"
-            />
-          )}
           <View style={styles.userDetails}>
-            <TouchableOpacity
-              onPress={() => {
-                if (transformation.user_id && onUserPress) {
-                  onUserPress(
-                    transformation.user_id,
-                    transformation.user_name || "Anonymous"
-                  );
-                }
-              }}
-              disabled={!transformation.user_id || !onUserPress}
-            >
-              <Text
-                style={[
-                  styles.userName,
-                  transformation.user_id &&
-                    onUserPress &&
-                    styles.userNameClickable,
-                ]}
-              >
-                {transformation.user_name || "Anonymous"}
-              </Text>
-            </TouchableOpacity>
+            <Text style={styles.userName}>{userName}</Text>
             <Text style={styles.date}>
               {new Date(transformation.created_at).toLocaleDateString()}
             </Text>
@@ -143,51 +116,25 @@ function TransformationCard({
   );
 }
 
-export default function TransformationFeed() {
-  const router = useRouter();
-  const [transformations, setTransformations] = useState<Transformation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const hasInitiallyLoadedRef = useRef(false);
+export default function UserTransformationViewer({
+  transformations,
+  initialIndex,
+  userName,
+}: UserTransformationViewerProps) {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const flatListRef = useRef<FlatList>(null);
 
-  const loadTransformations = useCallback(async (showLoading = true) => {
-    try {
-      if (showLoading) {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
-
-      const data = await TransformationService.getCompletedTransformations();
-      setTransformations(data);
-      hasInitiallyLoadedRef.current = true;
-    } catch (error) {
-      console.error("Failed to load transformations:", error);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  // Initial load
   useEffect(() => {
-    loadTransformations();
-  }, [loadTransformations]);
-
-  // Refresh when the screen comes into focus (when user navigates back to Feed tab)
-  useFocusEffect(
-    useCallback(() => {
-      // Only refresh if we already have data (skip on initial load)
-      if (hasInitiallyLoadedRef.current) {
-        loadTransformations(false); // false = don't show full loading state
-      }
-    }, [loadTransformations])
-  );
-
-  const handleRefresh = useCallback(() => {
-    loadTransformations(false);
-  }, [loadTransformations]);
+    // Scroll to initial index
+    if (flatListRef.current && transformations.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: initialIndex,
+          animated: false,
+        });
+      }, 100);
+    }
+  }, [initialIndex, transformations.length]);
 
   const onViewableItemsChanged = ({
     viewableItems,
@@ -199,16 +146,6 @@ export default function TransformationFeed() {
     }
   };
 
-  const handleUserPress = useCallback(
-    (userId: string, userName: string) => {
-      router.push({
-        pathname: "/user/[userId]/profile",
-        params: { userId },
-      });
-    },
-    [router]
-  );
-
   const renderItem = ({
     item,
     index,
@@ -219,32 +156,13 @@ export default function TransformationFeed() {
     <TransformationCard
       transformation={item}
       isActive={index === activeIndex}
-      onUserPress={handleUserPress}
+      userName={userName}
     />
   );
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingText}>Loading transformations...</Text>
-      </View>
-    );
-  }
-
-  if (transformations.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>No transformations yet</Text>
-        <Text style={styles.emptySubtitle}>
-          Create your first transformation to see it here!
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <FlatList
+      ref={flatListRef}
       data={transformations}
       renderItem={renderItem}
       keyExtractor={(item) => item.id}
@@ -257,9 +175,12 @@ export default function TransformationFeed() {
       viewabilityConfig={{
         itemVisiblePercentThreshold: 50,
       }}
-      refreshing={isRefreshing}
-      onRefresh={handleRefresh}
       style={styles.container}
+      getItemLayout={(data, index) => ({
+        length: screenHeight,
+        offset: screenHeight * index,
+        index,
+      })}
     />
   );
 }
@@ -279,8 +200,12 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.2)", // Lighter overlay for better contrast
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   labelContainer: {
     position: "absolute",
@@ -325,14 +250,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: DesignSystem.spacing.sm,
-    borderWidth: 2,
-    borderColor: DesignSystem.colors.text.primary,
-  },
   userDetails: {
     flex: 1,
   },
@@ -344,10 +261,6 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  userNameClickable: {
-    color: DesignSystem.colors.interactive.primary,
-    textDecorationLine: "underline",
   },
   date: {
     color: DesignSystem.colors.text.secondary,
@@ -372,37 +285,5 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: DesignSystem.colors.background.primary,
-  },
-  loadingText: {
-    color: DesignSystem.colors.text.primary,
-    marginTop: DesignSystem.spacing.md,
-    fontSize: DesignSystem.typography.fontSize.md,
-    fontWeight: DesignSystem.typography.fontWeight.medium,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: DesignSystem.colors.background.primary,
-    paddingHorizontal: DesignSystem.spacing.xxl,
-  },
-  emptyTitle: {
-    color: DesignSystem.colors.text.primary,
-    fontSize: DesignSystem.typography.fontSize.xl,
-    fontWeight: DesignSystem.typography.fontWeight.bold,
-    marginBottom: DesignSystem.spacing.md,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    color: DesignSystem.colors.text.secondary,
-    fontSize: DesignSystem.typography.fontSize.md,
-    textAlign: "center",
-    lineHeight: 24,
   },
 });

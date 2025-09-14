@@ -25,10 +25,43 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
+        <Stack
+          screenOptions={{
+            // Disable animation to prevent seeing the transition
+            animationEnabled: false,
+          }}
+        >
+          <Stack.Screen
+            name="(tabs)"
+            options={{
+              headerShown: false,
+              gestureEnabled: false, // Disable swipe back gesture
+              animationEnabled: false, // Disable animation
+            }}
+          />
+          <Stack.Screen
+            name="auth"
+            options={{
+              headerShown: false,
+              gestureEnabled: false, // Disable swipe back gesture
+              animationEnabled: false, // Disable animation
+            }}
+          />
           <Stack.Screen name="+not-found" />
+          <Stack.Screen
+            name="user/[userId]/profile"
+            options={{
+              headerShown: true,
+              gestureEnabled: true, // Allow back gesture for user profiles
+            }}
+          />
+          <Stack.Screen
+            name="user/[userId]/viewer"
+            options={{
+              headerShown: true,
+              gestureEnabled: true, // Allow back gesture for user viewers
+            }}
+          />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
