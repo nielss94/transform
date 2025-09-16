@@ -5,16 +5,39 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_BUILD_PROFILE": "development",
+        "EXPO_PUBLIC_ENABLE_LOGGING": "true"
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       },
       "ios": {
         "simulator": true
-      }
+      },
+      "env": {
+        "EXPO_PUBLIC_BUILD_PROFILE": "preview",
+        "EXPO_PUBLIC_ENABLE_LOGGING": "true"
+      },
+      "channel": "preview"
+    },
+    "internal-testing": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_BUILD_PROFILE": "internal-testing",
+        "EXPO_PUBLIC_ENABLE_LOGGING": "true"
+      },
+      "channel": "internal-testing"
     },
     "production": {
       "distribution": "store",
@@ -23,8 +46,13 @@
       },
       "android": {
         "autoIncrement": "versionCode",
-        "buildType": "apk"
-      }
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_BUILD_PROFILE": "production",
+        "EXPO_PUBLIC_ENABLE_LOGGING": "false"
+      },
+      "channel": "production"
     },
     "development-simulator": {
       "developmentClient": true,
@@ -32,10 +60,26 @@
       "ios": {
         "simulator": true
       },
-      "environment": "development"
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_BUILD_PROFILE": "development-simulator",
+        "EXPO_PUBLIC_ENABLE_LOGGING": "true"
+      },
+      "channel": "development"
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "internal": {
+      "android": {
+        "track": "internal"
+      }
+    },
+    "internal-testing": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

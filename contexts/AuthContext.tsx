@@ -1,4 +1,5 @@
 import { AuthResult, AuthService } from "@/lib/auth";
+import { logBuildInfo, logger, validateEnvironment } from "@/lib/buildInfo";
 import { AuthSession, AuthUser, SignInData, SignUpData } from "@/lib/supabase";
 import { useRouter } from "expo-router";
 import React, {
@@ -44,17 +45,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isAuthenticated = !!user && !!session;
 
   useEffect(() => {
-    // Get initial session
+    let mounted = true;
+
+    // Log build info and validate environment on app start
+    logBuildInfo();
+    const envValidation = validateEnvironment();
+
+    if (!envValidation.isValid) {
+      logger.error("Environment validation failed:", envValidation.missing);
+    }
+
+    if (envValidation.warnings.length > 0) {
+      logger.warn("Environment warnings:", envValidation.warnings);
+    }
+
+    // Get initial session from storage
     const getInitialSession = async () => {
       try {
+        logger.auth("Checking for stored session...");
         const { user: currentUser, session: currentSession } =
           await AuthService.getCurrentSession();
-        setUser(currentUser);
-        setSession(currentSession);
+
+        if (mounted) {
+          if (currentSession && currentUser) {
+            logger.auth("Found stored session for:", currentUser.email);
+            setUser(currentUser);
+            setSession(currentSession);
+          } else {
+            logger.auth("No stored session found");
+            setUser(null);
+            setSession(null);
+          }
+        }
       } catch (error) {
-        console.error("Error getting initial session:", error);
+        logger.error("Error getting initial session:", error);
+        if (mounted) {
+          setUser(null);
+          setSession(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -64,25 +96,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = AuthService.onAuthStateChange((event, session) => {
-      console.log(
+      logger.auth(
         "Auth state changed:",
         event,
         session ? `User: ${session.user?.email}` : "No session"
       );
 
-      if (session) {
-        setUser(session.user);
-        setSession(session);
-      } else {
-        setUser(null);
-        setSession(null);
+      if (mounted) {
+        if (session) {
+          setUser(session.user);
+          setSession(session);
+        } else {
+          setUser(null);
+          setSession(null);
+        }
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     });
 
     // Cleanup subscription on unmount
-    return () => subscription?.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // Redirect to main app when authenticated

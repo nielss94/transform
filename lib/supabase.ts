@@ -12,7 +12,62 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Safe AsyncStorage import with fallback
+let AsyncStorage: any = null;
+try {
+  AsyncStorage = require("@react-native-async-storage/async-storage").default;
+} catch (error) {
+  console.warn("AsyncStorage not available, using in-memory storage fallback");
+}
+
+// Create storage with proper fallback
+const createStorage = () => {
+  const memoryStorage = new Map<string, string>();
+
+  return {
+    getItem: async (key: string): Promise<string | null> => {
+      if (AsyncStorage) {
+        try {
+          return await AsyncStorage.getItem(key);
+        } catch (error) {
+          console.warn("AsyncStorage error, falling back to memory:", error);
+        }
+      }
+      return memoryStorage.get(key) || null;
+    },
+    setItem: async (key: string, value: string): Promise<void> => {
+      if (AsyncStorage) {
+        try {
+          await AsyncStorage.setItem(key, value);
+          return;
+        } catch (error) {
+          console.warn("AsyncStorage error, falling back to memory:", error);
+        }
+      }
+      memoryStorage.set(key, value);
+    },
+    removeItem: async (key: string): Promise<void> => {
+      if (AsyncStorage) {
+        try {
+          await AsyncStorage.removeItem(key);
+          return;
+        } catch (error) {
+          console.warn("AsyncStorage error, falling back to memory:", error);
+        }
+      }
+      memoryStorage.delete(key);
+    },
+  };
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: createStorage(),
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 
 // Authentication types
 export interface AuthUser {
